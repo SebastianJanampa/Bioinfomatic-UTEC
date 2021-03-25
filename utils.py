@@ -17,9 +17,6 @@ import numpy as np
 np.random.seed(1)# For reproducibility
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Flatten
-from tensorflow.keras.layers import Convolution1D, MaxPooling1D, GlobalAveragePooling1D
 from tensorflow import keras
 from tensorflow.keras import activations, layers
 from sklearn.preprocessing import LabelEncoder
@@ -63,22 +60,25 @@ def load_data(file):
 ##########################################
 ##############DEEP LEARNING###############
 ##########################################
+"""
+The classes and functions developed below are used in the 'Replication' and 'Deeper models' sections
+"""
 class myRepModel(keras.Model):
     def __init__(self, nb_classes):
         super().__init__(name='PaperModel')
         tf.random.set_seed(1234)# For reproducibility
-        self.conv1 = Convolution1D(filters=5, kernel_size=5, padding='valid',
+        self.conv1 = layers.Conv1D(filters=5, kernel_size=5, padding='valid',
                                   name='Conv1')
-        self.max1 = MaxPooling1D(pool_size=2, padding='valid',
+        self.max1 = layers.MaxPool1D(pool_size=2, padding='valid',
                                 name='MaxPool1')
-        self.conv2 = Convolution1D(filters=10, kernel_size=5, padding='valid',
+        self.conv2 = layers.Conv1D(filters=10, kernel_size=5, padding='valid',
                                   name='Conv2')
-        self.max2 = MaxPooling1D(pool_size=2, padding='valid',
+        self.max2 = layers.MaxPool1D(pool_size=2, padding='valid',
                                 name='MaxPool2')
         
-        self.fc1 = Dense(units=500, name='Dense1')
-        self.dp = Dropout(0.5, name='Dropout')
-        self.fc2 = Dense(nb_classes, name='Dense2')
+        self.fc1 = layers.Dense(units=500, name='Dense1')
+        self.dp = layers.Dropout(0.5, name='Dropout')
+        self.fc2 = layers.Dense(nb_classes, name='Dense2')
         
     def call(self, input_tensor):
         x = self.conv1(input_tensor)
@@ -87,7 +87,7 @@ class myRepModel(keras.Model):
         x = self.conv2(x)
         x = tf.nn.relu(x)
         x = self.max2(x)
-        x = Flatten(name='Flatten')(x)
+        x = layers.Flatten(name='Flatten')(x)
         x = self.fc1(x)
         x = self.dp(x)
         x = self.fc2(x)
@@ -99,7 +99,7 @@ class myRepModel(keras.Model):
 class BlockConv1Dv1(layers.Layer):
     def __init__(self, out_channels, kernel_size=5, stride=1, padding='same', name=None):
         super().__init__(name=name)
-        self.conv = Convolution1D(filters=out_channels, 
+        self.conv = layers.Conv1D(filters=out_channels, 
                                   kernel_size=kernel_size,
                                   strides=stride,
                                   padding=padding, 
@@ -130,22 +130,22 @@ class VGG(keras.Model):
         out_channels = 5
         # Convolutional layers
         self.blocks.append(BlockConv1Dv1(out_channels=5, stride=2, padding='valid'))
-        self.blocks.append(MaxPooling1D(pool_size=2, strides=2, padding='same'))
+        self.blocks.append(layers.MaxPool1D(pool_size=2, strides=2, padding='same'))
         for num_layers in layers:
             for _ in range(num_layers):
                 self.blocks.append(BlockConv1Dv1(out_channels))
-            self.blocks.append(MaxPooling1D(pool_size=2, strides=2, padding='same'))
+            self.blocks.append(layers.MaxPool1D(pool_size=2, strides=2, padding='same'))
             if out_channels < 256:
                 out_channels *= 2
         # Multi-connected layers (After each dense layer we applied a RELU activation)
-        self.dense1 = Dense(1024, kernel_initializer='he_normal')
-        self.dense2 = Dense(1024, kernel_initializer='he_normal')
-        self.outputs = Dense(nb_classes)
+        self.dense1 = layers.Dense(1024, kernel_initializer='he_normal')
+        self.dense2 = layers.Dense(1024, kernel_initializer='he_normal')
+        self.outputs = layers.Dense(nb_classes)
     def call(self, input_tensor, training=False):
         x = input_tensor
         for block in self.blocks:
             x = block(x, training=training)
-        x = Flatten()(x)
+        x = layers.Flatten()(x)
         x = self.dense1(x)
         x = activations.relu(x)
         x = self.dense2(x)
@@ -160,7 +160,7 @@ class BlockConv1Dv2(layers.Layer):
         super().__init__(name=name)
         self.bn = layers.BatchNormalization()
         # Relu activation function
-        self.conv = Convolution1D(filters=out_channels, 
+        self.conv = layers.Conv1D(filters=out_channels, 
                                   kernel_size=kernel_size,
                                   strides=stride,
                                   padding=padding, 
@@ -232,7 +232,7 @@ class ResNet(keras.Model):
         prev_channels = 5 if block_type == ResBlockv1 else 0
         # Convolutional layers
         self.blocks.append(BlockConv1Dv1(out_channels=5, stride=2, padding='valid'))
-        self.blocks.append(MaxPooling1D(pool_size=2, strides=2, padding='same'))
+        self.blocks.append(layers.MaxPool1D(pool_size=2, strides=2, padding='same'))
         for num in num_filters:
             for _ in range(num):
                 downsample = out_channels != prev_channels
@@ -246,24 +246,25 @@ class ResNet(keras.Model):
         x = input_tensor
         for block in self.blocks:
             x = block(x, training=training)
-        x = GlobalAveragePooling1D()(x)
+        x = layers.GlobalAveragePooling1D()(x)
         x = self.outputs(x)
         x = activations.softmax(x)
         return x
         
         
-def myModel(modeltype, nb_classes, model=None):
+def create_model(modeltype, nb_classes, model=None):
     if model is None:
         my_model = modeltype(nb_classes)
     else:
         my_model = modeltype(model, nb_classes)
-    my_model.compile(optimizer='adam',
-              loss='categorical_crossentropy',
-              metrics=['accuracy'])
+    optimizer = keras.optimizers.Adam(learning_rate=0.001)
+    my_model.compile(optimizer=optimizer,
+                     loss='categorical_crossentropy',
+                     metrics=['accuracy'])
     return my_model
 
 # Training
-def train_and_evaluate_model (model, datatr, labelstr, datate, labelste,nb_classes, num_epochs, callbacks=False, batchsize=256):
+def train_and_evaluate_model (model, datatr, labelstr, datate, labelste,nb_classes, num_epochs, callbacks=False, batchsize=256,verbose=0):
     datatr = datatr.reshape(datatr.shape + (1,))
     datate = datate.reshape(datate.shape + (1,))
     labelstr = keras.utils.to_categorical(labelstr, nb_classes)
@@ -285,8 +286,9 @@ def train_and_evaluate_model (model, datatr, labelstr, datate, labelste,nb_class
                                   validation_data=(datate, labelste_bin),
                                   epochs=num_epochs, 
                                   batch_size=batchsize, 
-                                  verbose=0,
-                                  callbacks=callback
+                                  verbose=verbose,
+                                  callbacks=callback,
+                                  shuffle=False
                                  )
         return model_history
         
@@ -296,7 +298,7 @@ def train_and_evaluate_model (model, datatr, labelstr, datate, labelste,nb_class
                   validation_data=(datate, labelste_bin),
                   epochs=num_epochs, 
                   batch_size=batchsize, 
-                  verbose=0,
+                  verbose=verbose,
                   callbacks=callback
                  )
         tr_scores = model.evaluate(datatr,labelstr,verbose=0)
@@ -344,3 +346,71 @@ def plot_results(history):
         axs.legend(loc='upper left')
         axs.set_xlabel('Epoch', fontsize=15)
         axs.set_title('Accuracy', fontsize=18, fontweight='bold')
+        
+"""
+The clases and functions developed below are used in the "Optimizing" section.
+The 'train_and_evaluate_model' function is the same.
+"""
+class myBlock(layers.Layer):
+    def __init__(self, filters=5):
+        super().__init__()
+        self.conv = layers.Conv1D(filters=5, kernel_size=5, padding='valid',
+                                  kernel_initializer='he_normal')
+        self.max = layers.MaxPool1D(pool_size=2, padding='valid')
+        self.bn = layers.BatchNormalization()
+    def call(self, input_tensor, training=False):
+        x = self.conv(input_tensor)
+        x = self.max(x)
+        x = keras.activations.relu(x)
+        x = self.bn(x, training=training)
+        return x
+    
+class myDense(layers.Layer):
+    def __init__(self, units):
+        super().__init__()
+        self.dense = layers.Dense(units=units, kernel_initializer='he_normal')
+        self.bn = layers.BatchNormalization()
+    def call(self, input_tensor, training=False):
+        x = self.dense(input_tensor)
+        x = activations.relu(x)
+        x = self.bn(x, training=training)
+        return x
+    
+class myModel(keras.Model):
+    def __init__(self, nb_classes, num_conv, num_denses=None):
+        super().__init__()
+        tf.random.set_seed(1234)
+        self.condi = num_denses is not None
+        self.blocks = []
+        for _ in range(num_conv):
+            self.blocks.append(myBlock())
+        if self.condi:
+            self.denses = []
+            for units in num_denses:
+                self.denses.append(myDense(units))
+        self.outputs = layers.Dense(nb_classes)
+        
+    def call(self, input_tensor, training=False):
+        # Convolutional layers
+        x = input_tensor
+        for block in self.blocks:
+            x = block(x, training=training)
+        # Multi-connected layers
+        x = layers.Flatten(name='Flatten')(x)
+        if self.condi:
+            for dense in self.denses:
+                x = dense(x, training=training)
+        x = self.outputs(x)
+        x = activations.softmax(x)
+        return x
+    
+def create_modelv2(modeltype, nb_classes, num_conv, num_denses=None):
+    my_model = modeltype(nb_classes, num_conv, num_denses)
+    optimizer = keras.optimizers.Adam(learning_rate=0.001)
+    my_model.compile(optimizer=optimizer,
+                     loss='categorical_crossentropy',
+                     metrics=['accuracy'])
+    return my_model
+
+
+
